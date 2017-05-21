@@ -16,6 +16,7 @@ class CPPPROJECT5_API AMyActor : public AActor
 public:	
 	// Sets default values for this actor's properties
 	AMyActor();
+    ~AMyActor();
 
 protected:
 	// Called when the game starts or when spawned
@@ -26,10 +27,10 @@ public:
 	virtual void Tick(float DeltaTime) override;
 
 private:
-    void NotifyAboutPlayer() const;
+    typedef TSharedPtr<IMediaPlayer> player_ptr;
 
 private:
     TArray<uint8> video_bytes_;
-    TSharedPtr<IMediaPlayer> player_;
+    player_ptr player_;
     IMediaTextureSink *texture_sink_ = nullptr;
 };

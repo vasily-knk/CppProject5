@@ -27,8 +27,69 @@ namespace
         bool HasMediaOption(const FName& Key) const override { return false; }
     };
 
-}
 
+    class MyConsumerArchive : public FMemoryArchive
+    {
+    public:
+        /**
+        * Returns the name of the Archive.  Useful for getting the name of the package a struct or object
+        * is in when a loading error occurs.
+        *
+        * This is overridden for the specific Archive Types
+        **/
+        FString GetArchiveName() const override { return TEXT("FMemoryReader"); }
+
+        int64 TotalSize() override
+        {
+            return FMath::Min((int64)Bytes.Num(), LimitSize);
+        }
+
+        void Serialize(void* Data, int64 Num) override
+        {
+            if (!slept_)
+            {
+                //FPlatformProcess::Sleep(20.0f);
+                slept_ = true;
+            }
+
+            if (Num && !ArIsError)
+            {
+                // Only serialize if we have the requested amount of data
+                if (Offset + Num <= TotalSize())
+                {
+                    FMemory::Memcpy(Data, &Bytes[Offset], Num);
+                    Offset += Num;
+                }
+                else
+                {
+                    ArIsError = true;
+                }
+            }
+        }
+
+        explicit MyConsumerArchive(const TArray<uint8>& InBytes, bool bIsPersistent = false)
+            : FMemoryArchive()
+            , Bytes(InBytes)
+            , LimitSize(INT64_MAX)
+        {
+            ArIsLoading = true;
+            ArIsPersistent = bIsPersistent;
+        }
+
+        /** With this method it's possible to attach data behind some serialized data. */
+        void SetLimitSize(int64 NewLimitSize)
+        {
+            LimitSize = NewLimitSize;
+        }
+
+    protected:
+
+        const TArray<uint8>& Bytes;
+        int64 LimitSize;
+        bool slept_ = false;
+    };
+
+}
 
 
 // Sets default values
@@ -42,6 +103,11 @@ AMyActor::AMyActor()
 
 }
 
+AMyActor::~AMyActor()
+{
+
+}
+
 // Called when the game starts or when spawned
 void AMyActor::BeginPlay()
 {
@@ -52,7 +118,7 @@ void AMyActor::BeginPlay()
     FString filename = TEXT("D:/vasya/sample.mp4");
     if (!FFileHelper::LoadFileToArray(video_bytes_, *filename))
     {
-        GEngine->AddOnScreenDebugMessage(-1, 3.0f, FColor::Red, TEXT("File not found!"));
+        UE_LOG(LogTemp, Error, TEXT("File not found"));
         return;
     }
 
@@ -89,7 +155,7 @@ void AMyActor::BeginPlay()
     IMediaOutput &output = player_->GetOutput();
     output.SetVideoSink(texture_sink_);
 
-    TSharedRef<FArchive, ESPMode::ThreadSafe> arch(new FMemoryReader(video_bytes_));
+    TSharedRef<FArchive, ESPMode::ThreadSafe> arch(new MyConsumerArchive(video_bytes_));
     auto size = arch->TotalSize();
 
     MyMediaOptions opts;
@@ -122,44 +188,14 @@ void AMyActor::BeginPlay()
         return;
     }
 
-
-
-
-
-    
-    //
-//    
-//    TSharedRef<FArchive, ESPMode::ThreadSafe> arch(new FMemoryReader(video_bytes_));
-//
-//    TSharedPtr<IMediaPlayer> native_player = mp_->GetBasePlayer().GetNativePlayer();
-//
-//    MyMediaOptions opts;
-//    //native_player->Open(arch, filename, opts);
 }
 
 // Called every frame
 void AMyActor::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
-
+    
     if (player_.IsValid())
-        player_->TickPlayer(DeltaTime);
+        player_->TickPlayer(0.01);
 }
 
-void AMyActor::NotifyAboutPlayer() const
-{
-//    FString msg;
-//    FColor color;
-//    if (mp_)
-//    {
-//        msg = "Found!";
-//        color = FColor::Green;
-//    }
-//    else
-//    {
-//        msg = "Not found!";
-//        color = FColor::Red;
-//    }
-//
-//    GEngine->AddOnScreenDebugMessage(-1, 3.0f, color, msg);
-}
