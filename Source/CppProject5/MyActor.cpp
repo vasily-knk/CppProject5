@@ -196,6 +196,6 @@ void AMyActor::Tick(float DeltaTime)
 	Super::Tick(DeltaTime);
     
     if (player_.IsValid())
-        player_->TickPlayer(0.01);
+        player_->TickPlayer(DeltaTime);
 }
 
