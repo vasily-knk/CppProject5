@@ -62,7 +62,7 @@ void AMyActor::BeginPlay()
         return;
     }
 
-	video_producer_ = create_video_producer();
+	video_producer_ = create_video_producer(1 * 1024 * 1024);
 
 }
 
@@ -152,7 +152,7 @@ void AMyActor::init_player_if_needed()
 			auto &tracks = player_->GetTracks();
 			tracks.SelectTrack(EMediaTrackType::Video, 0);
 			int aaa = 5;
-
+				
 		}
 		if (event == EMediaEvent::MediaOpened)
 		{

@@ -12,4 +12,4 @@ struct video_producer
 
 typedef TSharedPtr<video_producer, ESPMode::ThreadSafe> video_producer_ptr;
 
-video_producer_ptr create_video_producer();
+video_producer_ptr create_video_producer(uint32_t safety_span);

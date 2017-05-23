@@ -7,9 +7,15 @@ namespace
 struct memory_archive_impl
 	: FArchive
 {
-	memory_archive_impl()
+	memory_archive_impl(uint32_t safety_span)
+		: safety_span_(safety_span)
 	{
-		int aaa = 5;
+		UE_LOG(LogTemp, Display, TEXT("memory_archive_impl ctor"));
+	}
+
+	~memory_archive_impl()
+	{
+		UE_LOG(LogTemp, Display, TEXT("memory_archive_impl dtor"));
 	}
 	
 	void append(uint8_t const* data, uint32_t size)
@@ -21,6 +27,8 @@ struct memory_archive_impl
 
 	void shutdown()
 	{
+		UE_LOG(LogTemp, Display, TEXT("memory_archive_impl shutdown"));
+
 		FScopeLock lock(&cs_);
 
 		shutdown_ = true;
@@ -38,28 +46,34 @@ struct memory_archive_impl
 		if (shutdown_)
 			return offset_;
 
-		return INT32_MAX;
+		return buffer_.Num();
 	}
 
-	void Seek(int64 pos) final
+	void Seek(int64 initial_pos) final
 	{
-		while (true)
-		{
-			{
-				FScopeLock lock(&cs_);
+		if (initial_pos < 0)
+			return;
+		
+		const int64_t pos = FMath::Min<int64_t>(buffer_.Num(), initial_pos);
 
-				if (shutdown_)
-					break;
+		offset_ = pos;
 
-				if (pos <= buffer_.Num())
-				{
-					offset_ = pos;
-					break;
-				}
-			}
-
-			FPlatformProcess::Sleep(0.1f);
-		}
+//		while (true)
+//		{
+//			{
+//				FScopeLock lock(&cs_);
+//
+//				const int64_t reported_size = buffer_.Num() - safety_span_;
+//
+//				if (shutdown_ || pos <= reported_size)
+//				{
+//					offset_ = pos;
+//					break;
+//				}
+//			}
+//
+//			sleep();
+//		}
 	}
 	
 	int64 Tell() final
@@ -69,20 +83,26 @@ struct memory_archive_impl
 		return offset_;
 	}
 
-	void Serialize(void* data, int64 num) override
+	void Serialize(void* data, int64 initial_num) override
 	{
-		if (num <= 0)
+		if (initial_num <= 0)
 			return;
+
+		const int64_t num = FMath::Min(buffer_.Num() - offset_, initial_num);
 
 		while (true)
 		{
+			int64_t reported_size;
+			int64_t desired_pos;
+
 			{
 				FScopeLock lock(&cs_);
 
-				if (shutdown_)
-					break;
+				reported_size = buffer_.Num() - safety_span_;
+				desired_pos = offset_ + num;
 
-				if (offset_ + num <= buffer_.Num())
+
+				if (shutdown_ || desired_pos <= reported_size)
 				{
 					FMemory::Memcpy(data, &buffer_[offset_], num);
 					offset_ += num;
@@ -91,12 +111,21 @@ struct memory_archive_impl
 				}
 			}
 
-			FPlatformProcess::Sleep(0.1f);
+			UE_LOG(LogTemp, Display, TEXT("memory_archive_impl starving: %d < %d"), reported_size, desired_pos);
+			sleep();
 		}
 	}
 
 private:
+
+	void sleep() const
+	{
+		FPlatformProcess::Sleep(1.f);
+	}
+
+private:
 	TArray<uint8> buffer_;
+	int64_t safety_span_ = 0;
 	int64_t offset_ = 0;
 	FCriticalSection cs_;
 	bool shutdown_ = false;
@@ -106,8 +135,8 @@ private:
 struct video_producer_impl
 	: video_producer
 {
-	video_producer_impl()
-		: archive_(new memory_archive_impl())
+	explicit video_producer_impl(uint32_t safety_span)
+		: archive_(new memory_archive_impl(safety_span))
 	{
 		int aaa = 5;
 	}
@@ -136,8 +165,8 @@ private:
 
 } // namespace
 
-video_producer_ptr create_video_producer()
+video_producer_ptr create_video_producer(uint32_t safety_span)
 {
-	auto ptr = new video_producer_impl;
+	auto ptr = new video_producer_impl(safety_span);
 	return video_producer_ptr(ptr);
 }
